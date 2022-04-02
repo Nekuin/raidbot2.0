@@ -50,8 +50,17 @@ const CleanerHandler = (
                   textChannel.name
                 );
                 let filtered: Collection<string, Message>;
+                // when bulkDelete throws an error, we'll increment the retry count
+                // and we won't allow more than 10
+                let retries = 0;
                 // fetch messages, filter them and delete the filtered ones
+                let retryEscape = false;
                 do {
+                  // if we have more than 10 retries, change retryEscape to true
+                  // so the while loop will exit after this round.
+                  if (retries >= 10) {
+                    retryEscape = true;
+                  }
                   let fetched = await textChannel.messages.fetch(
                     { limit: 100 },
                     { cache: false, force: true }
@@ -68,8 +77,16 @@ const CleanerHandler = (
                     }
                   });
                   // delete filtered messages
-                  await textChannel.bulkDelete(filtered, false);
-                } while (filtered.size > 0);
+                  try {
+                    await textChannel.bulkDelete(filtered, false);
+                  } catch (err) {
+                    retries++;
+                    console.log(
+                      "Error while bulk deleting in channel, continuing as normal",
+                      err
+                    );
+                  }
+                } while (filtered.size > 0 && retryEscape === false);
                 // log success
                 console.log(
                   new Date(),
